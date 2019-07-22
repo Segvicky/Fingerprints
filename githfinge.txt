@@ -1,0 +1,57 @@
+import RPi.GPIO as GPIO
+import time
+import requests
+import hashlib
+import MySQLdb
+from pyfingerprint.pyfingerprint import PyFingerprint
+
+def connect():
+    return MySQLdb.connect(host="192.168.1.1", user="root", passwd="123456", db="abc")
+
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(18, GPIO.OUT)
+GPIO.output(18, GPIO.LOW)
+
+try:
+    f = PyFingerprint('/dev/ttyUSB1', 57600, 0xFFFFFFFF, 0x00000000)
+
+    if ( f.verifyPassword() == False ):
+        raise ValueError('The given fingerprint sensor password is wrong!')
+
+except Exception as e:
+    print('The fingerprint sensor could not be initialized!')
+    print('Exception message: ' + str(e))
+    pass
+
+db = connect()
+cur = db.cursor()
+cur.execute("SELECT * FROM fingers")
+row = cur.fetchall()
+while True:
+    try:
+        print('Waiting for finger...')
+        while(f.readImage() == False):
+            pass
+
+        f.convertImage(0x01)
+
+        for ro in row:
+            ss = eval(ro[2])
+            f.uploadCharacteristics(0x02,eval(ss))
+            if ( f.compareCharacteristics() == 0 ):
+                #print('Fingers do not match')
+                pass
+            else:
+                #print('Finger Match')
+                GPIO.output(18, GPIO.HIGH)
+                time.sleep(1)
+                GPIO.output(18, GPIO.LOW)
+                time.sleep(1)
+                break
+    #db.close()
+
+    except Exception as e:
+        print('Operation failed!')
+        print('Exception message: ' + str(e))
+        pass
+ 
